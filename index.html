@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#1F2A22" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Field Note" />
+<title>Field Note — identify anything in nature</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root{
+    --paper:#EDE6D6; --card:#F6F1E4; --ink:#1F2A22; --green:#28503C;
+    --verdigris:#3E7C6A; --tag:#A6442E; --amber:#9c7a1e; --faded:#7C7461; --line:#CDBFA3;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Newsreader',Georgia,serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.05;background-image:radial-gradient(var(--ink) .5px,transparent .5px);background-size:7px 7px}
+  #root{position:relative;z-index:1}
+  .wrap{max-width:560px;margin:0 auto;padding:0 18px 64px;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+
+  .mast{padding:24px 0 14px;text-align:center;border-bottom:1.5px solid var(--ink)}
+  .mast .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--faded)}
+  .mast h1{font-family:'Fraunces',serif;font-weight:600;font-size:40px;line-height:.95;margin:8px 0 6px;letter-spacing:-.01em}
+  .mast .sub{font-style:italic;color:var(--green);font-size:15px}
+
+  .tabs{display:flex;gap:0;border-bottom:1.5px solid var(--ink);position:sticky;top:0;background:var(--paper);z-index:5}
+  .tab{flex:1;background:none;border:none;border-right:1px solid var(--line);padding:11px 4px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faded)}
+  .tab:last-child{border-right:none}
+  .tab.on{color:var(--ink);background:var(--card);box-shadow:inset 0 -3px 0 var(--verdigris)}
+  .tab:focus-visible{outline:2px solid var(--verdigris);outline-offset:-2px}
+
+  .hero{padding:28px 0 6px}
+  .collect{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;width:100%;border:2px solid var(--ink);background:var(--card);border-radius:2px;padding:34px 20px;cursor:pointer;color:var(--ink);box-shadow:5px 6px 0 rgba(31,42,34,.16);transition:transform .12s ease,box-shadow .12s ease}
+  .collect:hover{transform:translate(-1px,-1px);box-shadow:6px 7px 0 rgba(31,42,34,.18)}
+  .collect:active{transform:translate(2px,2px);box-shadow:2px 2px 0 rgba(31,42,34,.18)}
+  .collect:focus-visible{outline:3px solid var(--verdigris);outline-offset:3px}
+  .collect .lens{font-size:34px;line-height:1}
+  .collect .big{font-family:'Fraunces',serif;font-weight:600;font-size:22px}
+  .collect .hint{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faded)}
+  .altrow{display:flex;justify-content:center;margin-top:14px}
+  .altbtn{background:none;border:none;color:var(--green);font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;padding:8px 10px;border-bottom:1.5px solid var(--green)}
+  .altbtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:3px}
+  .hide{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+  .forager{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding:12px 14px;border:1.5px solid var(--line);background:var(--card)}
+  .forager .lbl{font-size:14px}
+  .forager .lbl b{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--green);display:block}
+  .forager .lbl small{color:var(--faded);font-size:12.5px}
+  .switch{width:46px;height:26px;border:1.5px solid var(--ink);background:var(--paper);border-radius:14px;position:relative;cursor:pointer;flex:0 0 auto}
+  .switch i{position:absolute;top:2px;left:2px;width:18px;height:18px;background:var(--ink);border-radius:50%;transition:left .15s ease}
+  .switch.on{background:var(--tag);border-color:var(--tag)}
+  .switch.on i{left:24px;background:var(--paper)}
+  .switch:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+
+  .stage{margin-top:22px;background:var(--card);border:1.5px solid var(--ink);box-shadow:5px 6px 0 rgba(31,42,34,.14);padding:16px}
+  .stage h2{font-family:'Fraunces',serif;font-size:20px;margin:0 0 3px}
+  .stage .note{font-size:13.5px;color:var(--faded);margin:0 0 14px;line-height:1.4}
+  .thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .thumb{position:relative;aspect-ratio:1;border:1.5px solid var(--ink);overflow:hidden;background:#0d130f}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .thumb .x{position:absolute;top:2px;right:2px;width:22px;height:22px;border:none;background:var(--ink);color:var(--paper);font-size:13px;cursor:pointer;line-height:1;border-radius:1px}
+  .addtile{aspect-ratio:1;border:1.5px dashed var(--green);background:transparent;color:var(--green);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .addtile span{font-size:22px;line-height:1}
+  .addtile:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .loc{display:flex;align-items:center;gap:8px;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;color:var(--green);text-transform:uppercase}
+  .loc .clr{background:none;border:none;color:var(--tag);cursor:pointer;font-family:inherit;font-size:11px;text-decoration:underline;padding:0}
+  .loc.dim{color:var(--faded)}
+  .idbtn{width:100%;margin-top:16px;font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.16em;text-transform:uppercase;padding:15px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer}
+  .idbtn:disabled{opacity:.45;cursor:default}
+  .idbtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+
+  .working{padding:46px 0;text-align:center}
+  .working img{width:120px;height:120px;object-fit:cover;border:2px solid var(--ink);filter:saturate(.9)}
+  .working .label{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--green);margin-top:18px}
+  .working .step{font-style:italic;color:var(--faded);font-size:14px;margin-top:6px}
+  .dots::after{content:"";animation:dots 1.4s steps(4,end) infinite}
+  @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}100%{content:""}}
+
+  .sheet{background:var(--card);border:1.5px solid var(--ink);box-shadow:6px 8px 0 rgba(31,42,34,.14);margin-top:20px}
+  .mount{position:relative;background:#0d130f}
+  .mount img{display:block;width:100%;max-height:56vh;object-fit:contain}
+  .corner{position:absolute;width:26px;height:26px;background:var(--paper);border:1px solid var(--line);transform:rotate(45deg)}
+  .corner.tl{top:-13px;left:14px}.corner.tr{top:-13px;right:14px}.corner.bl{bottom:-13px;left:14px}.corner.br{bottom:-13px;right:14px}
+  .stamp{position:absolute;top:12px;right:12px;z-index:2;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--verdigris);border:2px solid var(--verdigris);border-radius:50%;width:74px;height:74px;display:flex;align-items:center;justify-content:center;transform:rotate(-14deg);opacity:.9;background:rgba(246,241,228,.1);text-align:center;line-height:1.1}
+  .strip{display:flex;gap:6px;padding:8px;background:#0d130f;border-top:1px solid #2a3a2e}
+  .strip img{width:44px;height:44px;object-fit:cover;border:1px solid #45543f}
+  .body{padding:20px 20px 24px}
+  .cat{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--verdigris)}
+  .name{font-family:'Fraunces',serif;font-weight:600;font-size:30px;line-height:1.04;margin:6px 0 2px;letter-spacing:-.01em}
+  .binom{font-style:italic;font-family:'Fraunces',serif;font-size:18px;color:var(--green)}
+
+  .conf{margin:14px 0}
+  .conf .row{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faded);margin-bottom:4px}
+  .bar{height:7px;background:var(--paper);border:1px solid var(--line)}
+  .bar i{display:block;height:100%;background:var(--verdigris)}
+  .bar.lo i{background:var(--tag)}.bar.mid i{background:var(--amber)}
+
+  .coach{margin-top:16px;border:1.5px solid var(--amber);background:rgba(156,122,30,.08);padding:13px 14px}
+  .coach h3{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin:0 0 7px}
+  .coach ul{margin:0 0 10px;padding-left:18px}.coach li{font-size:14.5px;line-height:1.45;margin-bottom:3px}
+  .coach .cbtn{width:100%;font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;padding:11px;border:1.5px solid var(--amber);background:var(--amber);color:var(--paper);cursor:pointer}
+
+  .tagline{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;padding:10px 12px;background:var(--paper);border:1px dashed var(--line)}
+  .chip{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faded)}
+  .chip b{color:var(--ink);font-weight:500}
+  .summary{font-size:17px;line-height:1.5;margin:6px 0 0}
+  .block{margin-top:20px;border-top:1px solid var(--line);padding-top:14px}
+  .block h3{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--green);margin:0 0 8px}
+  .block ul{margin:0;padding-left:18px}
+  .block li{font-size:15.5px;line-height:1.5;margin-bottom:5px}
+  .block p{margin:0;font-size:15.5px;line-height:1.5}
+
+  .alt{border:1px solid var(--line);padding:11px 12px;margin-bottom:8px;background:var(--paper);cursor:pointer;width:100%;text-align:left}
+  .alt:hover{border-color:var(--verdigris)}
+  .alt:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .alt .an{font-family:'Fraunces',serif;font-size:16px}
+  .alt .as{font-style:italic;color:var(--green);font-size:13px}
+  .alt .ac{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--faded);float:right;text-transform:uppercase}
+  .alt .aw{font-size:14px;line-height:1.45;margin-top:5px;color:var(--ink)}
+  .alt .promote{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--verdigris);margin-top:6px;display:block}
+  .conf-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px dotted var(--line)}
+  .conf-item:last-child{border-bottom:none}
+  .conf-item .nm{font-family:'Fraunces',serif;font-size:15.5px;flex:0 0 38%}
+  .conf-item .tl{font-size:14px;line-height:1.4;flex:1}
+
+  .safety{margin-top:20px;border:1.5px solid;padding:12px 14px;display:flex;gap:10px;align-items:flex-start}
+  .safety .ic{font-size:18px;line-height:1.2}
+  .safety .txt{font-size:14.5px;line-height:1.45}
+  .safety.danger{border-color:var(--tag);background:rgba(166,68,46,.07)}.safety.danger .ic{color:var(--tag)}
+  .safety.caution{border-color:var(--amber);background:rgba(156,122,30,.08)}.safety.caution .ic{color:var(--amber)}
+  .safety.safe{border-color:var(--verdigris);background:rgba(62,124,106,.08)}.safety.safe .ic{color:var(--verdigris)}
+  .safety h4{margin:0 0 2px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+
+  .verify{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+  .verify h3{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--green);margin:0 0 10px}
+  .vrow{display:flex;gap:10px}
+  .vinput{width:100%;font-family:'Newsreader',serif;font-size:16px;padding:11px 12px;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);margin-bottom:10px}
+  .vinput:focus{outline:2px solid var(--verdigris);outline-offset:1px}
+  .verified-note{margin-top:22px;border-top:1px solid var(--line);padding-top:16px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--verdigris);display:flex;align-items:center;gap:8px}
+  .verified-note span{font-size:16px}
+
+  .actions{display:flex;gap:10px;margin-top:22px}
+  .savedhint{margin-top:10px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faded)}
+  .delrow{margin-top:8px;text-align:center}
+  .dellink{background:none;border:none;color:var(--tag);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;border-bottom:1px solid var(--tag);padding:2px 0}
+  .dellink:focus-visible{outline:2px solid var(--tag);outline-offset:2px}
+  .filterbar{margin-top:14px}
+  .searchbox{width:100%;font-family:'Newsreader',serif;font-size:15px;padding:9px 11px;border:1.5px solid var(--ink);background:var(--card);color:var(--ink)}
+  .searchbox:focus{outline:2px solid var(--verdigris);outline-offset:1px}
+  .catrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .catchip{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:5px 8px;border:1px solid var(--line);background:var(--card);color:var(--faded);cursor:pointer}
+  .catchip.on{border-color:var(--ink);color:var(--paper);background:var(--green)}
+  .catchip:focus-visible{outline:2px solid var(--verdigris);outline-offset:1px}
+  .learnrow{display:flex;gap:10px}
+  .learn{flex:1;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--verdigris);text-decoration:none;border:1.5px solid var(--verdigris);padding:10px}
+  .learn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .notearea{width:100%;min-height:72px;font-family:'Newsreader',serif;font-size:15.5px;line-height:1.45;padding:10px 12px;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);margin-bottom:10px;resize:vertical}
+  .notearea:focus{outline:2px solid var(--verdigris);outline-offset:1px}
+  .inlink{background:none;border:none;color:var(--green);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-bottom:1.5px solid var(--green);padding:0 0 1px}
+  .inlink:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .backup{margin-top:26px;border-top:1.5px solid var(--ink);padding-top:16px}
+  .backup-h{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--green);margin-bottom:6px}
+  .backup p{margin:0 0 12px;font-size:14px;color:var(--faded);line-height:1.45}
+  .btn{flex:1;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;padding:13px;border:1.5px solid var(--ink);background:var(--card);color:var(--ink);cursor:pointer}
+  .btn.primary{background:var(--ink);color:var(--paper)}
+  .btn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+
+  .notice{background:var(--card);border:1.5px solid var(--tag);padding:22px;margin-top:22px;text-align:center}
+  .notice h3{font-family:'Fraunces',serif;font-size:22px;margin:0 0 6px}
+  .notice p{margin:0 0 4px;font-size:15.5px;line-height:1.45}
+
+  .herb{margin-top:34px}
+  .herb-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1.5px solid var(--ink);padding-bottom:6px}
+  .herb-head h2{font-family:'Fraunces',serif;font-size:22px;margin:0}
+  .herb-head .count{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;color:var(--faded)}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  .spec{position:relative;background:var(--card);border:1.5px solid var(--ink);padding:6px;cursor:pointer;text-align:left}
+  .spec:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .spec img{width:100%;aspect-ratio:1;object-fit:cover;border:1px solid var(--line);display:block}
+  .spec .sn{font-family:'Fraunces',serif;font-size:13px;line-height:1.1;margin-top:6px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .spec .sc{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.1em;color:var(--faded);text-transform:uppercase}
+  .spec .vtick{position:absolute;top:8px;left:8px;background:var(--verdigris);color:var(--paper);font-family:'IBM Plex Mono',monospace;font-size:9px;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+  .empty{font-style:italic;color:var(--faded);font-size:15px;padding:16px 0;text-align:center}
+
+  /* explore */
+  .view-head{padding:22px 0 4px}
+  .view-head h2{font-family:'Fraunces',serif;font-size:26px;margin:0}
+  .view-head p{margin:4px 0 0;color:var(--faded);font-size:14px;font-style:italic}
+  .ex-card{background:var(--card);border:1.5px solid var(--ink);padding:13px 14px;margin-top:10px}
+  .ex-card .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .ex-card .en{font-family:'Fraunces',serif;font-size:17px}
+  .ex-card .es{font-style:italic;color:var(--green);font-size:13px}
+  .ex-card .badge{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--paper);background:var(--verdigris);padding:3px 6px;white-space:nowrap}
+  .ex-card .ec{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faded);margin-top:2px}
+  .ex-card .ef{font-size:14.5px;line-height:1.45;margin-top:6px}
+  .ex-card{display:block;width:100%;text-align:left;cursor:pointer;font-family:inherit}
+  .ex-card:hover{border-color:var(--verdigris)}
+  .ex-card:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .ex-more{margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--verdigris)}
+  .backbtn{background:none;border:none;color:var(--green);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:8px 0;margin-top:8px}
+  .backbtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .popbtn{display:block;margin-top:8px;width:100%;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:8px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer}
+  .locedit{margin-top:-4px;margin-bottom:6px}
+  .callblock{margin:14px 0}
+  .callbtn{width:100%;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:12px;border:1.5px solid var(--verdigris);background:var(--card);color:var(--verdigris);cursor:pointer}
+  .callbtn:hover{background:var(--verdigris);color:var(--paper)}
+  .callbtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .callmsg{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:var(--faded);padding:10px 0;text-align:center}
+  .callcredit{margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:var(--faded)}
+  .callcredit a{color:var(--green)}
+  .picker{position:fixed;inset:0;z-index:50;background:var(--paper);display:flex;flex-direction:column}
+  .picker-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top));border-bottom:1.5px solid var(--ink);background:var(--card)}
+  .picker-title{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faded);text-align:center;flex:1}
+  .picker-map{flex:1;min-height:0}
+  .picker-foot{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 14px;padding-bottom:calc(12px + env(safe-area-inset-bottom));border-top:1.5px solid var(--ink);background:var(--card)}
+  .picker-coord{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:var(--green)}
+
+  /* map */
+  #map{height:62vh;min-height:340px;border:1.5px solid var(--ink);margin-top:16px;background:var(--card)}
+  .leaflet-popup-content{font-family:'Newsreader',serif}
+  .pop b{font-family:'Fraunces',serif;font-size:15px}
+  .pop img{width:100%;max-width:160px;border:1px solid var(--line);margin-top:5px;display:block}
+
+  /* life list / stats */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+  .stat{border:1.5px solid var(--ink);background:var(--card);padding:14px 8px;text-align:center}
+  .stat .num{font-family:'Fraunces',serif;font-size:30px;line-height:1}
+  .stat .lab{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faded);margin-top:5px}
+  .life{margin-top:20px}
+  .life-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px dotted var(--line);cursor:pointer;width:100%;text-align:left;background:none;border-left:none;border-right:none;border-top:none}
+  .life-row:focus-visible{outline:2px solid var(--verdigris)}
+  .life-row img{width:48px;height:48px;object-fit:cover;border:1px solid var(--line);flex:0 0 auto}
+  .life-row .ln{font-family:'Fraunces',serif;font-size:16px}
+  .life-row .ll{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--faded);text-transform:uppercase}
+  .life-row .cnt{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green)}
+
+  .foot{margin-top:40px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faded);line-height:1.8}
+  .keybar{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:center}
+  .kstatus{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faded)}
+  .kstatus small{text-transform:none;letter-spacing:0;font-size:11px}
+  .klink{background:none;border:none;border-bottom:1.5px solid var(--green);color:var(--green);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:2px 2px}
+  .klink:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .krow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
+  .kinput{font-family:'IBM Plex Mono',monospace;font-size:13px;padding:8px 10px;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);width:200px}
+  .kinput:focus{outline:2px solid var(--verdigris);outline-offset:1px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ════════ CONFIG ════════
+   MODEL: keyless preview requires "claude-sonnet-4-6".
+   When you deploy through your own serverless proxy, switch to the strongest
+   vision model you have access to for maximum accuracy:
+       "claude-opus-4-8"   (recommended — most capable widely-available)
+       "claude-fable-5"    (top Mythos tier, if enabled for you)
+   Your proxy must forward the `tools` array so web-search verification keeps working. */
+const MODEL = "claude-sonnet-4-6";
+const API_URL = "https://api.anthropic.com/v1/messages";
+const STORE_KEY = "fieldnote.herbarium.v3";
+const PREF_KEY = "fieldnote.prefs.v1";
+const COACH_THRESHOLD = 55;
+
+const store = {
+  async load(){
+    let list = [];
+    try{
+      const db = await idbOpen();
+      list = await new Promise((res)=>{
+        const tx=db.transaction(IDB_STORE,"readonly"); const rq=tx.objectStore(IDB_STORE).getAll();
+        rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>res([]);
+      });
+    }catch(e){ list = []; }
+    if(list.length===0){
+      const legacy = loadLegacyLS();
+      if(legacy.length){ try{ await store.save(legacy); }catch(e){} list = legacy; }
+    }
+    list.sort((a,b)=>(b.id||0)-(a.id||0));
+    return list;
+  },
+  async save(list){
+    const arr = Array.isArray(list) ? list : [];
+    try{
+      const db = await idbOpen();
+      await new Promise((res,rej)=>{
+        const tx=db.transaction(IDB_STORE,"readwrite"); const st=tx.objectStore(IDB_STORE);
+        const cr=st.clear(); cr.onsuccess=()=>{ arr.forEach(e=>{ try{ st.put(e); }catch(_){} }); };
+        tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error);
+      });
+      cleanupLegacyLS();
+      return true;
+    }catch(e){
+      try{ localStorage.setItem(STORE_KEY, JSON.stringify(arr.map(e=>({ id:e.id, thumb:e.thumb, date:e.date, place:e.place, loc:e.loc, result:e.result, verified:e.verified, corrected:e.corrected, note:e.note })))); }catch(e2){}
+      return false;
+    }
+  },
+  prefs(){ try{ return JSON.parse(localStorage.getItem(PREF_KEY))||{}; }catch(e){ return {}; } },
+  setPrefs(p){ try{ localStorage.setItem(PREF_KEY, JSON.stringify(p)); }catch(e){} }
+};
+
+const IDB_NAME = "fieldnote_db", IDB_STORE = "entries";
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    let r; try{ r = indexedDB.open(IDB_NAME, 1); }catch(e){ return rej(e); }
+    r.onupgradeneeded = ()=>{ const db=r.result; if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE,{ keyPath:"id" }); };
+    r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); r.onblocked = ()=>rej(new Error("idb blocked"));
+  });
+}
+function loadLegacyLS(){
+  const keys=["fieldnote.herbarium.v3","fieldnote.herbarium.v2","fieldnote.herbarium.v1"];
+  const byId={};
+  keys.forEach(k=>{ try{ const a=JSON.parse(localStorage.getItem(k)); if(Array.isArray(a)) a.forEach(e=>{ if(e&&e.id&&!byId[e.id]) byId[e.id]=e; }); }catch(e){} });
+  return Object.values(byId);
+}
+function cleanupLegacyLS(){ ["fieldnote.herbarium.v3","fieldnote.herbarium.v2","fieldnote.herbarium.v1"].forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} }); }
+
+const KEY_KEY = "fieldnote.apikey";
+function getKey(){ try{ return localStorage.getItem(KEY_KEY)||""; }catch(e){ return ""; } }
+function setKeyStored(v){ try{ if(v) localStorage.setItem(KEY_KEY, v); else localStorage.removeItem(KEY_KEY); }catch(e){} }
+
+/* downscale + auto-orient */
+async function processImage(file, max=1120, quality=0.8){
+  let bitmap;
+  try { bitmap = await createImageBitmap(file, { imageOrientation:"from-image" }); }
+  catch(e){
+    bitmap = await new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error("Unreadable image.")); i.src=r.result; };
+      r.onerror=()=>rej(new Error("Could not read that file.")); r.readAsDataURL(file);
+    });
+  }
+  let w=bitmap.width, h=bitmap.height;
+  if(w>max||h>max){ const r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
+  const c=document.createElement("canvas"); c.width=w; c.height=h;
+  c.getContext("2d").drawImage(bitmap,0,0,w,h);
+  const dataUrl=c.toDataURL("image/jpeg",quality);
+  return { dataUrl, base64:dataUrl.split(",")[1] };
+}
+async function makeThumb(dataUrl, max=300){
+  return new Promise((resolve)=>{
+    const i=new Image();
+    i.onload=()=>{ let w=i.width,h=i.height; if(w>max||h>max){const r=Math.min(max/w,max/h);w=Math.round(w*r);h=Math.round(h*r);}
+      const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(i,0,0,w,h);
+      resolve(c.toDataURL("image/jpeg",0.6)); };
+    i.onerror=()=>resolve(dataUrl); i.src=dataUrl;
+  });
+}
+
+async function placeName(lat,lng){
+  try{
+    const r=await fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude="+lat+"&longitude="+lng+"&localityLanguage=en");
+    const d=await r.json();
+    const p=[d.city||d.locality, d.principalSubdivision, d.countryName].filter(Boolean).join(", ");
+    return p||(lat.toFixed(3)+", "+lng.toFixed(3));
+  }catch(e){ return lat.toFixed(3)+", "+lng.toFixed(3); }
+}
+
+function getLocation(){
+  return new Promise((resolve)=>{
+    if(!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(async (pos)=>{
+      const { latitude:lat, longitude:lng } = pos.coords;
+      resolve({ lat:+lat.toFixed(4), lng:+lng.toFixed(4), place:await placeName(lat,lng) });
+    }, ()=>resolve(null), { enableHighAccuracy:true, timeout:8000, maximumAge:300000 });
+  });
+}
+
+/* read GPS + capture date from an uploaded photo's EXIF, if present */
+async function readExif(file){
+  try{
+    if(!window.exifr) return null;
+    const d = await window.exifr.parse(file, { gps:true, pick:["DateTimeOriginal","CreateDate","latitude","longitude"] });
+    if(!d) return null;
+    const out = {};
+    if(typeof d.latitude==="number" && typeof d.longitude==="number"){ out.lat=+d.latitude.toFixed(4); out.lng=+d.longitude.toFixed(4); }
+    const dt = d.DateTimeOriginal || d.CreateDate;
+    if(dt){ const date=new Date(dt); if(!isNaN(date)) out.date=date; }
+    return (out.lat!==undefined || out.date) ? out : null;
+  }catch(e){ return null; }
+}
+
+async function requestPersistentStorage(){
+  try{ if(navigator.storage && navigator.storage.persist){ await navigator.storage.persist(); } }catch(e){}
+}
+
+function extractJSON(text){
+  let t = (text||"").replace(/```json/gi,"").replace(/```/g,"").trim();
+  const a=t.indexOf("{"), b=t.lastIndexOf("}");
+  if(a>=0&&b>a) t=t.slice(a,b+1);
+  return JSON.parse(t);
+}
+function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function callModel(content){
+  const key = getKey();
+  const headers = { "Content-Type":"application/json" };
+  if(key){
+    headers["x-api-key"] = key;
+    headers["anthropic-version"] = "2023-06-01";
+    headers["anthropic-dangerous-direct-browser-access"] = "true";
+  }
+  let useTools = true;
+  const maxAttempts = 3;
+  for(let attempt=1; attempt<=maxAttempts; attempt++){
+    const body = { model: MODEL, max_tokens: 2048, messages:[{ role:"user", content }] };
+    if(useTools) body.tools = [{ type:"web_search_20250305", name:"web_search" }];
+    let res;
+    try{ res = await fetch(API_URL, { method:"POST", headers, body: JSON.stringify(body) }); }
+    catch(e){ if(attempt===maxAttempts) throw new Error("Couldn't reach the identification service. Check your connection and try again."); await wait(1500*attempt); continue; }
+
+    if(res.status===401||res.status===403) throw new Error("Your Anthropic API key is missing or was rejected. Set it with the key control near the bottom of the screen.");
+    if(res.status===429){
+      if(attempt===maxAttempts) throw new Error("Anthropic rate-limited your key (429). Your API account is likely on the free/entry tier with very low limits \u2014 add a little credit at console.anthropic.com under Billing (even $5 raises your limits), wait a minute, then try again. Animals and everything else work once this clears.");
+      const ra = parseInt(res.headers.get("retry-after")||"", 10);
+      useTools = false; // lighten the retry to use fewer tokens
+      await wait(ra>0 ? Math.min(ra,20)*1000 : 2500*attempt);
+      continue;
+    }
+    if(res.status===529){
+      if(attempt===maxAttempts) throw new Error("Anthropic is temporarily overloaded (529). Wait a moment and try again.");
+      await wait(2500*attempt); continue;
+    }
+    if(!res.ok) throw new Error("The identification service didn't respond ("+res.status+").");
+    const data = await res.json();
+    return (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+  }
+}
+
+function idPrompt(loc, hint, forager){
+  const where = loc
+    ? "\nLocation: approximately "+loc.lat+", "+loc.lng+" ("+loc.place+"). Strongly weight species that genuinely range here and rule out those that do not."
+    : "\nNo location available; do not assume a region.";
+  const correction = hint ? ("\n\nOBSERVER CORRECTION (trust this): \""+hint+"\". Re-examine and confirm it if the marks support it, or correct toward it. Note in the summary how it changed the result.") : "";
+  const forage = forager
+    ? "\n\nFORAGER MODE — SAFETY CRITICAL: This may be eaten. Be maximally conservative. For any plant or fungus, enumerate the dangerous toxic look-alikes in `confusables` with the exact field marks that separate them. NEVER set edible to \"yes\" unless the species is unmistakable AND you have listed every toxic look-alike. For fungi, prefer edible:\"unknown\" and state when a spore print or microscopy is required. When uncertain, lower confidence."
+    : "";
+  return "You are a panel of expert field naturalists (botanist, ornithologist, mycologist, entomologist, geologist). Identify ONE subject across ALL attached photographs (they show the same specimen)."
++where+forage+
+"\n\nMethod:\n1. List the diagnostic features actually visible.\n2. Narrow candidates by location and the visible marks.\n3. VERIFY: name your top candidate, then explicitly check it against each plausible look-alike. If you cannot rule a look-alike out from these photos, you MUST lower confidence and say which photo/detail would resolve it.\n4. Use web search to confirm subtle distinguishing characters and current taxonomy when uncertain.\n5. Score confidence HONESTLY (0-100). Do not inflate."
++correction+
+"\n\nReply with ONLY a raw JSON object, no markdown:\n{\n \"isNature\": true,\n \"primary\": {\n  \"commonName\":\"...\", \"scientificName\":\"Genus species\", \"family\":\"...\",\n  \"category\":\"Plant|Tree|Flower|Fungus|Bird|Mammal|Insect|Spider|Reptile|Amphibian|Fish|Mineral|Other\",\n  \"confidence\":0-100,\n  \"summary\":\"2 sentences\",\n  \"identifyingFeatures\":[\"3-5 visible marks confirming the ID\"],\n  \"habitat\":\"one line\", \"range\":\"one line\", \"seasonal\":\"when it blooms/fruits/migrates/is active — one line\",\n  \"safety\":{\"level\":\"safe|caution|danger|none\",\"edible\":\"yes|no|inedible|unknown\",\"note\":\"one line\"},\n  \"fieldNotes\":[\"2-3 interesting facts\"]\n },\n \"alternates\":[{\"commonName\":\"...\",\"scientificName\":\"...\",\"confidence\":0-100,\"why\":\"plausibility + the one separating feature\"}],\n \"confusables\":[{\"name\":\"look-alike\",\"tell\":\"the single distinguishing feature\"}],\n \"coachTips\":[\"if confidence<70, the specific extra photo/detail that would raise certainty\"]\n}\nalternates 0-3 ranked; confusables 0-4; coachTips 0-3. If nothing natural is shown: {\"isNature\":false,\"summary\":\"what you see\"}.";
+}
+
+async function identify(photos, loc, hint, forager){
+  const content = photos.map(p=>({ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:p.base64 } }));
+  content.push({ type:"text", text: idPrompt(loc, hint, forager) });
+  const text = await callModel(content);
+  try{ return extractJSON(text); }catch(e){ throw new Error("Couldn't read the field report. Try a clearer photo."); }
+}
+
+function explorePrompt(loc, when){
+  return "You are a local field naturalist. For location "+loc.lat+", "+loc.lng+" ("+loc.place+") in "+when+", list 8-12 wild species someone is genuinely likely to encounter NOW, mixing plants, birds, insects and others that are actually active/visible this time of year here. Use web search to ground it in real local/seasonal occurrence."
++"\n\nReply with ONLY raw JSON:\n{\"region\":\"...\",\"season\":\"...\",\"species\":[{\"commonName\":\"...\",\"scientificName\":\"...\",\"category\":\"Plant|Tree|Flower|Fungus|Bird|Mammal|Insect|Spider|Reptile|Amphibian|Fish|Other\",\"status\":\"in bloom|fruiting|migrating|nesting|resident|active|emerging\",\"lookFor\":\"one line: where and how to spot it now\"}]}";
+}
+async function exploreNearby(loc, when){
+  const text = await callModel([{ type:"text", text: explorePrompt(loc, when) }]);
+  return extractJSON(text);
+}
+
+function profilePrompt(sp, loc, when){
+  const who = sp.scientificName ? (sp.commonName+" ("+sp.scientificName+")") : sp.commonName;
+  const where = loc ? (" The reader is in "+loc.place+" during "+when+"; include a specific line in whereToSeeNow about finding it there right now.") : "";
+  return "You are an expert field naturalist writing the most thorough, accurate species profile you can for "+who+", a "+(sp.category||"species")+"."+where+" Use web search to ground every detail in reliable sources and current taxonomy and conservation status. Be specific and richly detailed, not generic."
++"\n\nReply with ONLY a raw JSON object, no markdown:\n{\n \"commonName\":\"...\", \"scientificName\":\"...\", \"family\":\"...\", \"order\":\"...\", \"category\":\"...\",\n \"alsoCalled\":[\"other common names\"],\n \"overview\":\"3-4 vivid sentences\",\n \"identification\":[\"5-8 precise field marks\"],\n \"size\":\"measurements\", \"lifespan\":\"...\",\n \"habitat\":\"2-3 sentences\", \"range\":\"2-3 sentences\", \"seasonality\":\"what it does through the year\",\n \"diet\":\"...\", \"behavior\":\"2-3 sentences\", \"lifecycle\":\"reproduction and development\",\n \"ecology\":\"role in its ecosystem, relationships\",\n \"conservation\":\"IUCN status and a sentence on threats/trend\",\n \"safety\":{\"level\":\"safe|caution|danger|none\",\"edible\":\"yes|no|inedible|unknown\",\"note\":\"one line\"},\n \"similar\":[{\"name\":\"look-alike\",\"tell\":\"how to tell them apart\"}],\n \"funFacts\":[\"4-5 genuinely interesting, specific facts\"],\n \"whereToSeeNow\":\"one practical line\"\n}\nOmit any field you cannot fill accurately rather than inventing it.";
+}
+async function fetchProfile(sp, loc, when){
+  const text = await callModel([{ type:"text", text: profilePrompt(sp, loc, when) }]);
+  return extractJSON(text);
+}
+
+function confClass(c){ return c>=70?"":c>=45?"mid":"lo"; }
+
+function SafetyBanner({ safety }){
+  if(!safety) return null;
+  const hasNote = safety.note && safety.note.trim();
+  if((safety.level==="none"||!safety.level) && (!safety.edible||safety.edible==="unknown") && !hasNote) return null;
+  const lvl = ["safe","caution","danger"].includes(safety.level)?safety.level:"caution";
+  const ic = lvl==="danger"?"\u26A0":lvl==="safe"?"\u2713":"!";
+  const head = lvl==="danger"?"Hazard":lvl==="safe"?"Generally safe":"Handle with care";
+  return (
+    <div className={"safety "+lvl}>
+      <span className="ic" aria-hidden="true">{ic}</span>
+      <div className="txt">
+        <h4>{head}</h4>
+        {hasNote && <span>{safety.note}</span>}
+        {safety.edible && safety.edible!=="unknown" &&
+          <div style={{marginTop:4}}>Edibility: <b>{safety.edible}</b> {"\u2014"} never eat a wild find on an app{"\u2019"}s word alone.</div>}
+      </div>
+    </div>
+  );
+}
+
+function VerifyBlock({ entry, onConfirm, onCorrect }){
+  const [mode,setMode] = useState(null);
+  const [hint,setHint] = useState("");
+  if(entry.verified) return <div className="verified-note"><span aria-hidden="true">{"\u2713"}</span> You verified this identification.</div>;
+  return (
+    <div className="verify">
+      <h3>Is this right?</h3>
+      {mode!=="correct" ? (
+        <div className="vrow">
+          <button className="btn primary" onClick={()=>onConfirm(entry)}>Looks right</button>
+          <button className="btn" onClick={()=>setMode("correct")}>Not quite</button>
+        </div>
+      ) : (
+        <div>
+          <input className="vinput" value={hint} onChange={e=>setHint(e.target.value)}
+                 placeholder={"What is it? A name, or just a hint\u2026"} aria-label="your correction" />
+          <div className="vrow">
+            <button className="btn" onClick={()=>{ setMode(null); setHint(""); }}>Cancel</button>
+            <button className="btn primary" disabled={!hint.trim()} onClick={()=>onCorrect(entry, hint.trim())}>Re-identify</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function probeDuration(url){
+  return new Promise((resolve)=>{
+    const a=new Audio(); let done=false;
+    const finish=(d)=>{ if(done) return; done=true; try{ a.src=""; }catch(e){} resolve(d||0); };
+    a.preload="metadata";
+    a.onloadedmetadata=()=>finish(isFinite(a.duration)?a.duration:0);
+    a.onerror=()=>finish(0);
+    setTimeout(()=>finish(0), 7000);
+    a.src=url;
+  });
+}
+async function pickLongEnough(cands, minSec){
+  const slice=cands.slice(0,18);
+  const durs=await Promise.all(slice.map(c=>probeDuration(c.url)));
+  let longest=null, longestD=0;
+  for(let i=0;i<slice.length;i++){
+    if(durs[i]>=minSec){ slice[i].duration=durs[i]; slice[i].short=false; return slice[i]; }
+    if(durs[i]>longestD){ longestD=durs[i]; longest=slice[i]; }
+  }
+  if(longest && longestD>0){ longest.duration=longestD; longest.short=true; return longest; } // next best
+  return null; // nothing playable at all
+}
+
+function CallButton({ r }){
+  const cat = (r && r.category) || "";
+  const vocal = ["Bird","Mammal"].includes(cat);
+  const [state,setState] = useState("idle"); // idle|loading|ready|none|error
+  const [audio,setAudio] = useState(null);
+  if(!vocal) return null;
+  const term = r.scientificName || r.commonName || "";
+  if(!term) return null;
+  const find = async ()=>{
+    setState("loading"); setAudio(null);
+    try{
+      const tj = await fetch("https://api.inaturalist.org/v1/taxa?q="+encodeURIComponent(term)+"&per_page=5").then(x=>x.json());
+      const taxon = (tj.results||[]).find(x=>x.rank==="species") || (tj.results||[])[0];
+      if(!taxon){ setState("none"); return; }
+      const oj = await fetch("https://api.inaturalist.org/v1/observations?taxon_id="+taxon.id+"&sounds=true&order_by=votes&order=desc&per_page=60").then(x=>x.json());
+      const cands=[];
+      for(const obs of (oj.results||[])){
+        const s=(obs.sounds||[]).find(x=>x.file_url);
+        if(s) cands.push({ url:s.file_url, by:(obs.user&&(obs.user.name||obs.user.login))||"an iNaturalist observer", license:(s.license_code||"").toUpperCase(), link:"https://www.inaturalist.org/observations/"+obs.id });
+      }
+      if(!cands.length){ setState("none"); return; }
+      const pick = await pickLongEnough(cands, 10);
+      if(!pick){ setState("none"); return; }
+      setAudio(pick); setState("ready");
+    }catch(e){ setState("error"); }
+  };
+  return (
+    <div className="callblock">
+      {state==="idle" && <button className="callbtn" onClick={find}>{"\u25B6"} Hear its call</button>}
+      {state==="loading" && <div className="callmsg">Finding a clip at least 10 seconds long{"\u2026"}</div>}
+      {state==="none" && <div className="callmsg">No playable recording found for this species.</div>}
+      {state==="error" && <button className="callbtn" onClick={find}>Couldn{"\u2019"}t load {"\u2014"} tap to retry</button>}
+      {state==="ready" && audio &&
+        <div>
+          {audio.short && <div className="callmsg" style={{textAlign:"left",color:"var(--amber)",padding:"0 0 8px"}}>No clip 10 seconds or longer exists for this species {"\u2014"} playing the longest available ({Math.round(audio.duration)}s).</div>}
+          <audio src={audio.url} controls autoPlay style={{width:"100%",marginTop:"2px"}} />
+          <div className="callcredit">{audio.duration?(Math.round(audio.duration)+"s \u00b7 "):""}Recording by {audio.by}{audio.license?(" \u00b7 "+audio.license):""} {"\u00b7"} <a href={audio.link} target="_blank" rel="noopener noreferrer">iNaturalist {"\u2197"}</a></div>
+        </div>}
+    </div>
+  );
+}
+
+function LocationPicker({ initial, onSave, onCancel }){
+  const ref=useRef(null), mapObj=useRef(null), markerRef=useRef(null);
+  const hasInit = initial && typeof initial.lat==="number";
+  const [pos,setPos]=useState(hasInit?{lat:initial.lat,lng:initial.lng}:null);
+  const [busy,setBusy]=useState(false);
+  useEffect(()=>{
+    if(!ref.current||!window.L) return;
+    const start = pos ? [pos.lat,pos.lng] : [39.5,-98.35];
+    const map=window.L.map(ref.current,{scrollWheelZoom:true}).setView(start, pos?12:3);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"\u00a9 OpenStreetMap",maxZoom:19}).addTo(map);
+    if(pos) markerRef.current=window.L.marker([pos.lat,pos.lng]).addTo(map);
+    map.on("click",(e)=>{ const lat=+e.latlng.lat.toFixed(4), lng=+e.latlng.lng.toFixed(4); setPos({lat,lng});
+      if(markerRef.current) markerRef.current.setLatLng([lat,lng]); else markerRef.current=window.L.marker([lat,lng]).addTo(map); });
+    setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} },120);
+    mapObj.current=map;
+    return ()=>{ if(mapObj.current){ mapObj.current.remove(); mapObj.current=null; } };
+  },[]);
+  const useMine=async ()=>{
+    setBusy(true); const l=await getLocation(); setBusy(false);
+    if(l && mapObj.current){ setPos({lat:l.lat,lng:l.lng}); mapObj.current.setView([l.lat,l.lng],13);
+      if(markerRef.current) markerRef.current.setLatLng([l.lat,l.lng]); else markerRef.current=window.L.marker([l.lat,l.lng]).addTo(mapObj.current); }
+  };
+  const save=async ()=>{ if(!pos) return; setBusy(true); const place=await placeName(pos.lat,pos.lng); setBusy(false); onSave({lat:pos.lat,lng:pos.lng,place,manual:true}); };
+  return (
+    <div className="picker">
+      <div className="picker-bar">
+        <button className="backbtn" onClick={onCancel}>{"\u2190"} Cancel</button>
+        <span className="picker-title">Tap the map to set the spot</span>
+        <button className="klink" onClick={useMine} disabled={busy}>Use my location</button>
+      </div>
+      <div className="picker-map" ref={ref}></div>
+      <div className="picker-foot">
+        <span className="picker-coord">{pos?pos.lat+", "+pos.lng:"No point set yet"}</span>
+        <button className="btn primary" style={{flex:"0 0 auto"}} onClick={save} disabled={!pos||busy}>{busy?"Saving\u2026":"Save location"}</button>
+      </div>
+    </div>
+  );
+}
+
+function NoteBlock({ entry, onSave }){
+  const [editing,setEditing] = useState(false);
+  const [val,setVal] = useState(entry.note||"");
+  useEffect(()=>{ setVal(entry.note||""); setEditing(false); },[entry.id]);
+  return (
+    <div className="block"><h3>Your note</h3>
+      {editing ? (
+        <div>
+          <textarea className="notearea" value={val} onChange={e=>setVal(e.target.value)}
+            placeholder={"Where you found it, conditions, anything you want to remember\u2026"} aria-label="your note" />
+          <div className="vrow">
+            <button className="btn" onClick={()=>{ setVal(entry.note||""); setEditing(false); }}>Cancel</button>
+            <button className="btn primary" onClick={()=>{ onSave(entry, val.trim()); setEditing(false); }}>Save note</button>
+          </div>
+        </div>
+      ) : entry.note ? (
+        <p style={{whiteSpace:"pre-wrap"}}>{entry.note} <button className="inlink" onClick={()=>setEditing(true)}>edit</button></p>
+      ) : (
+        <button className="inlink" onClick={()=>setEditing(true)}>+ add a note</button>
+      )}
+    </div>
+  );
+}
+
+function Specimen({ entry, onAgain, onConfirm, onCorrect, onPromote, onAddAngle, onDelete, onSaveNote, onSetLocation }){
+  const [picking,setPicking] = useState(false);
+  const r = entry.result.primary;
+  const alts = entry.result.alternates||[];
+  const conf = entry.result.confusables||[];
+  const tips = entry.result.coachTips||[];
+  const cc = typeof r.confidence==="number"?r.confidence:60;
+  const showCoach = cc < COACH_THRESHOLD || (tips.length>0 && cc < 75);
+  const sheetRef = useRef(null);
+  const addRef = useRef(null);
+  const hero = (entry.images&&entry.images[0]) || entry.thumb;
+  const term = r.scientificName || r.commonName || "";
+  const wikiUrl = "https://en.wikipedia.org/wiki/Special:Search?search="+encodeURIComponent(term);
+  const inatUrl = "https://www.inaturalist.org/search?q="+encodeURIComponent(term);
+
+  const share = async ()=>{
+    if(!sheetRef.current || !window.html2canvas) return;
+    try{
+      const canvas = await window.html2canvas(sheetRef.current, { backgroundColor:"#F6F1E4", scale:2, useCORS:true });
+      canvas.toBlob(async (blob)=>{
+        if(!blob) return;
+        const file = new File([blob], (r.commonName||"specimen")+".png", { type:"image/png" });
+        if(navigator.canShare && navigator.canShare({files:[file]})){
+          try{ await navigator.share({ files:[file], title:r.commonName||"Field Note" }); return; }catch(e){}
+        }
+        const url=URL.createObjectURL(blob); const a=document.createElement("a");
+        a.href=url; a.download=file.name; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }, "image/png");
+    }catch(e){}
+  };
+
+  return (
+    <div className="sheet" ref={sheetRef}>
+      <div className="mount">
+        <span className="corner tl"/><span className="corner tr"/><span className="corner bl"/><span className="corner br"/>
+        {entry.verified && <span className="stamp">Verified</span>}
+        <img src={hero} alt={r.commonName||"specimen"} />
+      </div>
+      {entry.images && entry.images.length>1 &&
+        <div className="strip">{entry.images.map((im,i)=><img key={i} src={im} alt={"angle "+(i+1)} />)}</div>}
+      <div className="body">
+        <div className="cat">{r.category||"Specimen"}</div>
+        <h2 className="name">{r.commonName}</h2>
+        {r.scientificName && <div className="binom">{r.scientificName}</div>}
+
+        <div className="conf">
+          <div className="row"><span>Confidence</span><span>{cc}%</span></div>
+          <div className={"bar "+confClass(cc)}><i style={{width:Math.max(4,Math.min(100,cc))+"%"}}/></div>
+        </div>
+
+        <CallButton r={r} />
+
+        {showCoach &&
+          <div className="coach">
+            <h3>Not fully sure {"\u2014"} help it out</h3>
+            {tips.length>0
+              ? <ul>{tips.map((t,i)=><li key={i}>{t}</li>)}</ul>
+              : <ul><li>Add a sharp close-up of a diagnostic part (leaf edge, flower centre, underside, or marking).</li></ul>}
+            <button className="cbtn" onClick={()=>addRef.current&&addRef.current.click()}>Add a close-up and re-check</button>
+            <input ref={addRef} className="hide" type="file" accept="image/*" capture="environment"
+                   onChange={e=>{ if(e.target.files[0]) onAddAngle(entry, e.target.files[0]); e.target.value=""; }} />
+          </div>}
+
+        <div className="tagline">
+          <span className="chip" style={{color:"var(--verdigris)"}}>Saved to herbarium {"\u2713"}</span>
+          {r.family && <span className="chip">Family <b>{r.family}</b></span>}
+          <span className="chip">Collected <b>{entry.date}</b></span>
+          {entry.place && <span className="chip">At <b>{entry.place}</b>{entry.loc&&entry.loc.fromPhoto?" (from photo)":entry.loc&&entry.loc.manual?" (pinned by you)":""}</span>}
+          {entry.corrected && <span className="chip" style={{color:"var(--verdigris)"}}>Revised from your note</span>}
+        </div>
+
+        <div className="locedit">
+          <button className="inlink" onClick={()=>setPicking(true)}>
+            {entry.loc && typeof entry.loc.lat==="number" ? "Adjust location on map" : "+ Add a location"}
+          </button>
+        </div>
+        {picking && <LocationPicker initial={entry.loc} onCancel={()=>setPicking(false)}
+          onSave={(loc)=>{ onSetLocation(entry, loc); setPicking(false); }} />}
+
+        {r.summary && <p className="summary">{r.summary}</p>}
+
+        <SafetyBanner safety={r.safety} />
+
+        {Array.isArray(r.identifyingFeatures)&&r.identifyingFeatures.length>0 &&
+          <div className="block"><h3>Field marks</h3><ul>{r.identifyingFeatures.map((f,i)=><li key={i}>{f}</li>)}</ul></div>}
+
+        {(r.habitat||r.range||r.seasonal) &&
+          <div className="block"><h3>Where {"&"} when</h3>
+            {r.habitat && <p style={{marginBottom:6}}>{r.habitat}</p>}
+            {r.range && <p style={{color:"var(--faded)",marginBottom:6}}>{r.range}</p>}
+            {r.seasonal && <p style={{color:"var(--green)",fontStyle:"italic"}}>{r.seasonal}</p>}
+          </div>}
+
+        {alts.length>0 &&
+          <div className="block"><h3>Other possibilities</h3>
+            {alts.map((a,i)=>(
+              <button className="alt" key={i} onClick={()=>onPromote(entry, a)}>
+                <span className="ac">{typeof a.confidence==="number"?a.confidence+"%":""}</span>
+                <span className="an">{a.commonName}</span>{a.scientificName && <span className="as"> {"\u00b7"} {a.scientificName}</span>}
+                {a.why && <div className="aw">{a.why}</div>}
+                <span className="promote">Tap to re-check as this {"\u2192"}</span>
+              </button>
+            ))}
+          </div>}
+
+        {conf.length>0 &&
+          <div className="block"><h3>Don{"\u2019"}t confuse with</h3>
+            {conf.map((c,i)=>(
+              <div className="conf-item" key={i}><span className="nm">{c.name}</span><span className="tl">{c.tell}</span></div>
+            ))}
+          </div>}
+
+        {Array.isArray(r.fieldNotes)&&r.fieldNotes.length>0 &&
+          <div className="block"><h3>Field notes</h3><ul>{r.fieldNotes.map((f,i)=><li key={i}>{f}</li>)}</ul></div>}
+
+        {term &&
+          <div className="block"><h3>Learn more</h3>
+            <div className="learnrow">
+              <a className="learn" href={wikiUrl} target="_blank" rel="noopener noreferrer">Wikipedia {"\u2197"}</a>
+              <a className="learn" href={inatUrl} target="_blank" rel="noopener noreferrer">iNaturalist {"\u2197"}</a>
+            </div>
+          </div>}
+
+        <NoteBlock entry={entry} onSave={onSaveNote} />
+
+        <VerifyBlock entry={entry} onConfirm={onConfirm} onCorrect={onCorrect} />
+
+        <div className="actions">
+          <button className="btn" onClick={share}>Share plate</button>
+          <button className="btn primary" onClick={onAgain}>Collect another</button>
+        </div>
+        <div className="savedhint">Kept in your herbarium {"\u2014"} see the Collect and Life list tabs anytime.</div>
+        <div className="delrow"><button className="dellink" onClick={()=>{ if(window.confirm("Remove this find from your herbarium?")) onDelete(entry); }}>Delete this find</button></div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileField({ label, children }){
+  if(!children) return null;
+  return <div className="block"><h3>{label}</h3><p>{children}</p></div>;
+}
+function SpeciesProfile({ sp, data, busy, err, onBack, onRetry }){
+  const term = (data&&data.scientificName) || (data&&data.commonName) || sp.scientificName || sp.commonName || "";
+  const wikiUrl = "https://en.wikipedia.org/wiki/Special:Search?search="+encodeURIComponent(term);
+  const inatUrl = "https://www.inaturalist.org/search?q="+encodeURIComponent(term);
+  return (
+    <div>
+      <button className="backbtn" onClick={onBack}>{"\u2190"} Back to Out now</button>
+      <div className="view-head" style={{paddingTop:8}}>
+        <h2>{(data&&data.commonName)||sp.commonName}</h2>
+        {((data&&data.scientificName)||sp.scientificName) && <p style={{fontStyle:"italic"}}>{(data&&data.scientificName)||sp.scientificName}</p>}
+      </div>
+      {busy && <div className="working"><div className="label">Compiling the profile<span className="dots"></span></div><div className="step">gathering and verifying details</div></div>}
+      {err && <div className="notice"><p>{err}</p><div className="actions"><button className="btn primary" onClick={onRetry}>Try again</button></div></div>}
+      {data && <div className="sheet"><div className="body">
+        <div className="tagline">
+          {data.family && <span className="chip">Family <b>{data.family}</b></span>}
+          {data.order && <span className="chip">Order <b>{data.order}</b></span>}
+          {data.category && <span className="chip">{data.category}</span>}
+        </div>
+        {Array.isArray(data.alsoCalled)&&data.alsoCalled.length>0 &&
+          <p style={{color:"var(--faded)",fontStyle:"italic",margin:"4px 0 0"}}>Also called: {data.alsoCalled.join(", ")}</p>}
+        {data.overview && <p className="summary" style={{marginTop:12}}>{data.overview}</p>}
+
+        <SafetyBanner safety={data.safety} />
+
+        <CallButton r={data} />
+        {Array.isArray(data.identification)&&data.identification.length>0 &&
+          <div className="block"><h3>How to identify</h3><ul>{data.identification.map((f,i)=><li key={i}>{f}</li>)}</ul></div>}
+
+        {(data.size||data.lifespan) &&
+          <div className="block"><h3>Measurements</h3>
+            {data.size && <p style={{marginBottom:6}}>Size: {data.size}</p>}
+            {data.lifespan && <p>Lifespan: {data.lifespan}</p>}
+          </div>}
+
+        <ProfileField label="Habitat">{data.habitat}</ProfileField>
+        <ProfileField label="Range">{data.range}</ProfileField>
+        <ProfileField label="Through the year">{data.seasonality}</ProfileField>
+        <ProfileField label="Diet">{data.diet}</ProfileField>
+        <ProfileField label="Behavior">{data.behavior}</ProfileField>
+        <ProfileField label="Life cycle">{data.lifecycle}</ProfileField>
+        <ProfileField label="Ecology">{data.ecology}</ProfileField>
+        <ProfileField label="Conservation">{data.conservation}</ProfileField>
+
+        {Array.isArray(data.similar)&&data.similar.length>0 &&
+          <div className="block"><h3>Similar species</h3>
+            {data.similar.map((c,i)=>(<div className="conf-item" key={i}><span className="nm">{c.name}</span><span className="tl">{c.tell}</span></div>))}
+          </div>}
+
+        {Array.isArray(data.funFacts)&&data.funFacts.length>0 &&
+          <div className="block"><h3>Field notes</h3><ul>{data.funFacts.map((f,i)=><li key={i}>{f}</li>)}</ul></div>}
+
+        <ProfileField label="Where to see it now">{data.whereToSeeNow}</ProfileField>
+
+        {term &&
+          <div className="block"><h3>Learn more</h3>
+            <div className="learnrow">
+              <a className="learn" href={wikiUrl} target="_blank" rel="noopener noreferrer">Wikipedia {"\u2197"}</a>
+              <a className="learn" href={inatUrl} target="_blank" rel="noopener noreferrer">iNaturalist {"\u2197"}</a>
+            </div>
+          </div>}
+      </div></div>}
+    </div>
+  );
+}
+
+function ExploreView({ loc, ensureLoc }){
+  const [data,setData] = useState(null);
+  const [busy,setBusy] = useState(false);
+  const [err,setErr] = useState(null);
+  const [sel,setSel] = useState(null);
+  const [profile,setProfile] = useState(null);
+  const [pbusy,setPbusy] = useState(false);
+  const [perr,setPerr] = useState(null);
+  const when = useMemo(()=>new Date().toLocaleDateString(undefined,{month:"long"}), []);
+
+  const load = useCallback(async ()=>{
+    setErr(null); setBusy(true);
+    try{
+      const l = loc || await ensureLoc();
+      if(!l){ setErr("Turn on location to see what's around you."); setBusy(false); return; }
+      const d = await exploreNearby(l, when);
+      setData(d);
+    }catch(e){ setErr("Couldn't load nearby species. Try again."); }
+    setBusy(false);
+  },[loc,ensureLoc,when]);
+
+  const openProfile = useCallback(async (sp)=>{
+    setSel(sp); setProfile(null); setPerr(null); setPbusy(true);
+    try{ const p = await fetchProfile(sp, loc||null, when); setProfile(p); }
+    catch(e){ setPerr("Couldn't load that profile. Try again."); }
+    setPbusy(false);
+  },[loc,when]);
+
+  if(sel){
+    return <SpeciesProfile sp={sel} data={profile} busy={pbusy} err={perr}
+      onBack={()=>{ setSel(null); setProfile(null); setPerr(null); }}
+      onRetry={()=>openProfile(sel)} />;
+  }
+
+  return (
+    <div>
+      <div className="view-head"><h2>Out now</h2><p>{data?data.region+" \u00b7 "+data.season:"What you\u2019re likely to find around you this season"}</p></div>
+      {!data && !busy &&
+        <button className="idbtn" onClick={load} style={{marginTop:16}}>Show what{"\u2019"}s nearby</button>}
+      {busy && <div className="working"><div className="label">Surveying the area<span className="dots"></span></div><div className="step">checking local, seasonal occurrence</div></div>}
+      {err && <div className="notice"><p>{err}</p><div className="actions"><button className="btn primary" onClick={load}>Try again</button></div></div>}
+      {data && Array.isArray(data.species) && data.species.map((s,i)=>(
+        <button className="ex-card" key={i} onClick={()=>openProfile(s)}>
+          <div className="top">
+            <div><span className="en">{s.commonName}</span>{s.scientificName && <span className="es"> {"\u00b7"} {s.scientificName}</span>}</div>
+            {s.status && <span className="badge">{s.status}</span>}
+          </div>
+          <div className="ec">{s.category}</div>
+          {s.lookFor && <div className="ef">{s.lookFor}</div>}
+          <div className="ex-more">Tap for the full profile {"\u2192"}</div>
+        </button>
+      ))}
+      {data && <div className="altrow" style={{marginTop:18}}><button className="altbtn" onClick={load}>refresh</button></div>}
+    </div>
+  );
+}
+
+function MapView({ herb, openEntry }){
+  const ref = useRef(null);
+  const mapObj = useRef(null);
+  const pts = useMemo(()=>herb.filter(h=>h.loc && typeof h.loc.lat==="number"), [herb]);
+
+  useEffect(()=>{
+    if(!ref.current || !window.L) return;
+    if(mapObj.current){ mapObj.current.remove(); mapObj.current=null; }
+    const center = pts.length ? [pts[0].loc.lat, pts[0].loc.lng] : [39.5,-98.35];
+    const map = window.L.map(ref.current,{scrollWheelZoom:false}).setView(center, pts.length?9:3);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+      attribution:"\u00a9 OpenStreetMap", maxZoom:19
+    }).addTo(map);
+    const esc=(s)=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    const group=[];
+    pts.forEach(h=>{
+      const m=window.L.marker([h.loc.lat,h.loc.lng]).addTo(map);
+      const name=(h.result.primary||{}).commonName||"Specimen";
+      const img=h.thumb?("<img src='"+h.thumb+"'/>"):"";
+      m.bindPopup("<div class='pop'><b>"+esc(name)+"</b>"+img+"<button class='popbtn' data-id='"+h.id+"'>Open find \u2192</button></div>");
+      group.push([h.loc.lat,h.loc.lng]);
+    });
+    map.on("popupopen",(e)=>{
+      const node=e.popup.getElement(); if(!node) return;
+      const btn=node.querySelector(".popbtn");
+      if(btn) btn.onclick=()=>{ const id=Number(btn.getAttribute("data-id")); const h=pts.find(p=>p.id===id); if(h) openEntry(h); };
+    });
+    if(group.length>1){ try{ map.fitBounds(group,{padding:[30,30]}); }catch(e){} }
+    setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 120);
+    mapObj.current=map;
+    return ()=>{ if(mapObj.current){ mapObj.current.remove(); mapObj.current=null; } };
+  },[pts]);
+
+  return (
+    <div>
+      <div className="view-head"><h2>Your range map</h2><p>{pts.length?pts.length+" find"+(pts.length>1?"s":"")+" pinned where you collected them \u2014 tap a pin to open":"Finds collected with location on will pin here"}</p></div>
+      {pts.length===0
+        ? <div className="empty">None of your finds have a saved location yet. Keep location on when you collect (or use photos that carry GPS), and they{"\u2019"}ll pin here.</div>
+        : <div id="map" ref={ref}></div>}
+    </div>
+  );
+}
+
+function ListView({ herb, openEntry, onExport, onImport }){
+  const stats = useMemo(()=>{
+    const species = {};
+    herb.forEach(h=>{
+      const p=h.result.primary||{}; const key=(p.scientificName||p.commonName||"?").toLowerCase();
+      if(!species[key]) species[key]={ name:p.commonName||"Unknown", sci:p.scientificName||"", cat:p.category||"", thumb:h.thumb, first:h.date, count:0, entry:h };
+      species[key].count++;
+    });
+    const list=Object.values(species).sort((a,b)=>b.count-a.count);
+    const cats={}; list.forEach(s=>{ cats[s.cat]=(cats[s.cat]||0)+1; });
+    return { total:herb.length, unique:list.length, verified:herb.filter(h=>h.verified).length, list };
+  },[herb]);
+
+  return (
+    <div>
+      <div className="view-head"><h2>Life list</h2><p>Every species you{"\u2019"}ve pressed, your own running record</p></div>
+      <div className="stats">
+        <div className="stat"><div className="num">{stats.total}</div><div className="lab">Collected</div></div>
+        <div className="stat"><div className="num">{stats.unique}</div><div className="lab">Species</div></div>
+        <div className="stat"><div className="num">{stats.verified}</div><div className="lab">Verified</div></div>
+      </div>
+      {stats.list.length===0
+        ? <div className="empty">Your life list is empty. Go find something.</div>
+        : <div className="life">{stats.list.map((s,i)=>(
+            <button className="life-row" key={i} onClick={()=>openEntry(s.entry)}>
+              <img src={s.thumb} alt={s.name} />
+              <div><div className="ln">{s.name}</div><div className="ll">{s.cat} {"\u00b7"} first seen {s.first}</div></div>
+              <div className="cnt">{"\u00d7"}{s.count}</div>
+            </button>
+          ))}</div>}
+      <div className="backup">
+        <div className="backup-h">Backup</div>
+        <p>Your collection lives only on this device. Export a copy now and then so you never lose it.</p>
+        <div className="vrow">
+          <button className="btn" onClick={onExport} disabled={herb.length===0}>Export backup</button>
+          <button className="btn" onClick={onImport}>Restore</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KeyBar(){
+  const [open,setOpen] = useState(false);
+  const [val,setVal] = useState("");
+  const [saved,setSaved] = useState(!!getKey());
+  return (
+    <div className="keybar">
+      <span className="kstatus">Anthropic key {saved?"set \u2713":"not set"} <small>(only needed on your own deployed site)</small></span>
+      {!open
+        ? <button className="klink" onClick={()=>setOpen(true)}>{saved?"Change":"Set key"}</button>
+        : <span className="krow">
+            <input className="kinput" type="password" placeholder={"sk-ant-\u2026"} value={val} onChange={e=>setVal(e.target.value)} aria-label="Anthropic API key" />
+            <button className="klink" onClick={()=>{ const t=val.trim(); setKeyStored(t); setSaved(!!t); setVal(""); setOpen(false); }}>Save</button>
+            {saved && <button className="klink" onClick={()=>{ setKeyStored(""); setSaved(false); setVal(""); setOpen(false); }}>Remove</button>}
+          </span>}
+    </div>
+  );
+}
+
+function App(){
+  const [tab,setTab] = useState("collect");
+  const [phase,setPhase] = useState("home");
+  const [photos,setPhotos] = useState([]);
+  const [loc,setLoc] = useState(undefined);
+  const [locBusy,setLocBusy] = useState(false);
+  const [entry,setEntry] = useState(null);
+  const [error,setError] = useState(null);
+  const [herb,setHerb] = useState([]);
+  const [forager,setForager] = useState(false);
+  const [search,setSearch] = useState("");
+  const [fcat,setFcat] = useState("All");
+  const [captureDate,setCaptureDate] = useState(null);
+  const camRef=useRef(null), upRef=useRef(null), importRef=useRef(null);
+
+  useEffect(()=>{ store.load().then(list=>setHerb(list)).catch(()=>{}); const p=store.prefs(); if(p.forager) setForager(true); requestPersistentStorage(); },[]);
+  const toggleForager = ()=>{ setForager(v=>{ const n=!v; store.setPrefs({...store.prefs(),forager:n}); return n; }); };
+
+  const ensureLoc = useCallback(async ()=>{
+    if(loc) return loc;
+    setLocBusy(true); const l=await getLocation(); setLoc(l); setLocBusy(false); return l;
+  },[loc]);
+
+  const addPhoto = useCallback(async (file, fromGallery)=>{
+    if(!file) return;
+    try{
+      if(fromGallery){
+        const ex = await readExif(file);
+        if(ex){
+          if(ex.date) setCaptureDate(ex.date);
+          if(ex.lat!==undefined){ setLocBusy(true); const pl=await placeName(ex.lat,ex.lng); setLoc({ lat:ex.lat, lng:ex.lng, place:pl, fromPhoto:true }); setLocBusy(false); }
+        }
+      }
+      const p = await processImage(file);
+      setPhotos(prev=>[...prev,p].slice(0,4));
+      if(loc===undefined && !locBusy){ setLocBusy(true); const l=await getLocation(); setLoc(l); setLocBusy(false); }
+    }catch(e){ setError(e.message); setPhase("result"); }
+  },[loc,locBusy]);
+
+  const saveEntry = (rec)=> setHerb(prev=>{ const next=[rec,...prev.filter(e=>e.id!==rec.id)].slice(0,200); store.save(next); return next; });
+  const updateEntry = (rec)=> setHerb(prev=>{ const next=prev.map(e=>e.id===rec.id?rec:e); store.save(next); return next; });
+  function compact(e){ return { id:e.id, thumb:e.thumb, date:e.date, place:e.place, loc:e.loc, result:e.result, verified:!!e.verified, corrected:!!e.corrected, note:e.note||"" }; }
+
+  const run = useCallback(async ()=>{
+    if(photos.length===0) return;
+    setError(null); setPhase("working"); setTab("collect");
+    try{
+      const result = await identify(photos, loc||null, null, forager);
+      if(result.isNature===false){ setError(result.summary||"That doesn't look wild. Try a plant, critter, or stone."); setPhase("result"); return; }
+      const thumb = await makeThumb(photos[0].dataUrl);
+      const when = captureDate ? captureDate : new Date();
+      const rec = { id:Date.now(), images:photos.map(p=>p.dataUrl), thumb,
+        date:when.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}),
+        place:loc?loc.place:null, loc:loc||null, result };
+      setEntry(rec); setPhase("result"); saveEntry(rec);
+    }catch(e){ setError(e.message||"Something went wrong in the field."); setPhase("result"); }
+  },[photos,loc,forager]);
+
+  const reExamine = useCallback(async (base, hint, extraFile)=>{
+    setError(null); setEntry(base); setPhase("working"); setTab("collect");
+    try{
+      let imgs = (base.images||[]).map(d=>({ dataUrl:d, base64:(d.split(",")[1]||"") }));
+      if(!imgs.length && base.thumb) imgs=[{ dataUrl:base.thumb, base64:(base.thumb.split(",")[1]||"") }];
+      if(extraFile){ const p=await processImage(extraFile); imgs=[...imgs,p].slice(0,5); }
+      const result = await identify(imgs, base.loc||null, hint, forager);
+      if(result.isNature===false){ setError(result.summary||"Couldn't place that one."); setPhase("result"); return; }
+      const images = imgs.map(p=>p.dataUrl);
+      const thumb = base.thumb || await makeThumb(images[0]);
+      const updated = { ...base, images, thumb, result, corrected: !!hint || base.corrected, verified:false };
+      setEntry(updated); setPhase("result"); updateEntry(updated);
+    }catch(e){ setError(e.message||"Re-identification failed."); setPhase("result"); }
+  },[forager]);
+
+  const confirmEntry = useCallback((base)=>{ const u={...base,verified:true}; setEntry(u); updateEntry(u); },[]);
+  const setEntryLocation = useCallback((base, loc)=>{ const u={...base, loc, place: loc?loc.place:base.place}; setEntry(u); updateEntry(u); },[]);
+  const onCorrect = useCallback((base,hint)=>reExamine(base,hint,null),[reExamine]);
+  const onPromote = useCallback((base,alt)=>reExamine(base,"You believe it may be "+(alt.commonName||"")+(alt.scientificName?(" ("+alt.scientificName+")"):"")+". Re-examine specifically for that and confirm or correct.",null),[reExamine]);
+  const onAddAngle = useCallback((base,file)=>reExamine(base,null,file),[reExamine]);
+
+  const openEntry = (it)=>{ setEntry(it); setError(null); setPhase("result"); setTab("collect"); };
+  const reset = ()=>{ setPhase("home"); setEntry(null); setError(null); setPhotos([]); setCaptureDate(null); setLoc(undefined);
+    if(camRef.current)camRef.current.value=""; if(upRef.current)upRef.current.value=""; };
+
+  const deleteEntry = useCallback((base)=>{
+    setHerb(prev=>{ const next=prev.filter(e=>e.id!==base.id); store.save(next); return next; });
+    reset();
+  },[]);
+  const saveNote = useCallback((base,text)=>{
+    const u={...base, note:text}; setEntry(u); updateEntry(u);
+  },[]);
+  const exportHerb = useCallback(()=>{
+    try{
+      const data = JSON.stringify({ app:"Field Note", version:3, exported:new Date().toISOString(), entries:herb.map(compact) }, null, 0);
+      const blob=new Blob([data],{type:"application/json"});
+      const url=URL.createObjectURL(blob); const a=document.createElement("a");
+      a.href=url; a.download="field-note-herbarium-"+new Date().toISOString().slice(0,10)+".json"; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(e){}
+  },[herb]);
+  const importHerb = useCallback(async (file)=>{
+    if(!file) return;
+    try{
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const incoming = Array.isArray(data) ? data : (data.entries||[]);
+      if(!incoming.length) return;
+      setHerb(prev=>{
+        const byId={}; [...incoming, ...prev].forEach(e=>{ if(e&&e.id&&!byId[e.id]) byId[e.id]=e; });
+        const merged=Object.values(byId).sort((a,b)=>b.id-a.id).slice(0,200);
+        store.save(merged); return merged;
+      });
+    }catch(e){ setError("That backup file couldn't be read."); setPhase("result"); setTab("collect"); }
+  },[]);
+
+  const Tabs = (
+    <div className="tabs" role="tablist">
+      {[["collect","Collect"],["explore","Explore"],["map","Map"],["list","Life list"]].map(([k,label])=>(
+        <button key={k} role="tab" aria-selected={tab===k} className={"tab"+(tab===k?" on":"")}
+          onClick={()=>{ if(k==="collect" && phase!=="working"){ setEntry(null); setError(null); setPhase("home"); } setTab(k); }}>{label}</button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="wrap">
+      <header className="mast">
+        <div className="eyebrow">A pocket field guide</div>
+        <h1>Field Note</h1>
+        <div className="sub">Point it at anything wild. Find out what it is.</div>
+      </header>
+      {Tabs}
+
+      <input ref={camRef} className="hide" type="file" accept="image/*" capture="environment" onChange={e=>{addPhoto(e.target.files[0], false); e.target.value="";}} />
+      <input ref={upRef} className="hide" type="file" accept="image/*" onChange={e=>{addPhoto(e.target.files[0], true); e.target.value="";}} />
+      <input ref={importRef} className="hide" type="file" accept="application/json,.json" onChange={e=>{ importHerb(e.target.files[0]); e.target.value=""; }} />
+
+      {tab==="collect" && phase==="home" &&
+        <React.Fragment>
+          {photos.length===0 ? (
+            <section className="hero">
+              <button className="collect" onClick={()=>camRef.current&&camRef.current.click()}>
+                <span className="lens" aria-hidden="true">{"\u25CE"}</span>
+                <span className="big">Photograph a specimen</span>
+                <span className="hint">Opens your camera</span>
+              </button>
+              <div className="altrow"><button className="altbtn" onClick={()=>upRef.current&&upRef.current.click()}>or choose from photos</button></div>
+              <div className="forager">
+                <div className="lbl"><b>Forager mode {forager?"on":"off"}</b><small>Extra-conservative on edibility and toxic look-alikes</small></div>
+                <button className={"switch"+(forager?" on":"")} role="switch" aria-checked={forager} aria-label="forager mode" onClick={toggleForager}><i/></button>
+              </div>
+            </section>
+          ) : (
+            <section className="stage">
+              <h2>Staged specimen</h2>
+              <p className="note">Add close-ups {"\u2014"} a leaf, flower, marking, or underside. More angles, sharper ID.</p>
+              <div className="thumbs">
+                {photos.map((p,i)=>(
+                  <div className="thumb" key={i}>
+                    <img src={p.dataUrl} alt={"angle "+(i+1)} />
+                    <button className="x" aria-label="remove" onClick={()=>setPhotos(ph=>ph.filter((_,j)=>j!==i))}>{"\u00d7"}</button>
+                  </div>
+                ))}
+                {photos.length<4 && <button className="addtile" onClick={()=>camRef.current&&camRef.current.click()}><span aria-hidden="true">+</span>add angle</button>}
+              </div>
+              <div className={"loc"+(loc?"":" dim")}>
+                <span aria-hidden="true">{"\uD83D\uDCCD"}</span>
+                {locBusy ? "locating\u2026" : loc ? <span>{loc.place}</span> : "location off"}
+                {loc && <button className="clr" onClick={()=>setLoc(null)}>clear</button>}
+              </div>
+              <button className="idbtn" onClick={run}>Identify {"\u00b7"} {photos.length} photo{photos.length>1?"s":""}{forager?" \u00b7 forager":""}</button>
+              <div className="altrow"><button className="altbtn" onClick={()=>upRef.current&&upRef.current.click()}>add from photos</button></div>
+            </section>
+          )}
+
+          <section className="herb">
+            <div className="herb-head"><h2>Your herbarium</h2><span className="count">{herb.length} collected</span></div>
+            {herb.length>0 &&
+              <div className="filterbar">
+                <input className="searchbox" type="search" placeholder={"Search your finds\u2026"} value={search} onChange={e=>setSearch(e.target.value)} aria-label="search herbarium" />
+                <div className="catrow">
+                  {["All","Plant","Tree","Flower","Fungus","Bird","Mammal","Insect","Spider","Reptile","Amphibian","Fish","Mineral","Other"].map(c=>(
+                    <button key={c} className={"catchip"+(fcat===c?" on":"")} onClick={()=>setFcat(c)}>{c}</button>
+                  ))}
+                </div>
+              </div>}
+            {(()=>{
+              const q=search.trim().toLowerCase();
+              const filtered = herb.filter(it=>{
+                const p=it.result.primary||{};
+                if(fcat!=="All" && (p.category||"")!==fcat) return false;
+                if(q){ const hay=((p.commonName||"")+" "+(p.scientificName||"")+" "+(it.note||"")).toLowerCase(); if(hay.indexOf(q)<0) return false; }
+                return true;
+              });
+              if(herb.length===0) return <div className="empty">Nothing pressed yet. Your finds will mount here.</div>;
+              if(filtered.length===0) return <div className="empty">No finds match that.</div>;
+              return <div className="grid">
+                {filtered.map(it=>(
+                  <button key={it.id} className="spec" onClick={()=>openEntry(it)}>
+                    {it.verified && <span className="vtick" aria-hidden="true">{"\u2713"}</span>}
+                    <img src={it.thumb||(it.images&&it.images[0])} alt={(it.result.primary||{}).commonName||"specimen"} />
+                    <span className="sn">{(it.result.primary||{}).commonName||"Unknown"}</span>
+                    <span className="sc">{(it.result.primary||{}).category||""}</span>
+                  </button>
+                ))}
+              </div>;
+            })()}
+          </section>
+        </React.Fragment>}
+
+      {tab==="collect" && phase==="working" &&
+        <div className="working">
+          {(photos[0]||entry) && <img src={photos[0]?photos[0].dataUrl:((entry.images&&entry.images[0])||entry.thumb)} alt="examining" />}
+          <div className="label">Examining the specimen<span className="dots"></span></div>
+          <div className="step">checking field marks{loc?", local range":""}, ruling out look-alikes</div>
+        </div>}
+
+      {tab==="collect" && phase==="result" &&
+        (error
+          ? <div className="notice"><h3>No identification</h3><p>{error}</p><div className="actions"><button className="btn primary" onClick={reset}>Try again</button></div></div>
+          : entry && <Specimen entry={entry} onAgain={reset} onConfirm={confirmEntry} onCorrect={onCorrect} onPromote={onPromote} onAddAngle={onAddAngle} onDelete={deleteEntry} onSaveNote={saveNote} onSetLocation={setEntryLocation} />)}
+
+      {tab==="explore" && <ExploreView loc={loc&&loc!==undefined?loc:null} ensureLoc={ensureLoc} />}
+      {tab==="map" && <MapView herb={herb} openEntry={openEntry} />}
+      {tab==="list" && <ListView herb={herb} openEntry={openEntry} onExport={exportHerb} onImport={()=>importRef.current&&importRef.current.click()} />}
+
+      <KeyBar />
+      <footer className="foot">
+        Field Note {"\u2014"} built for Troy<br/>
+        Best-guess identifications {"\u00b7"} never eat a wild find on an app{"\u2019"}s word
+      </footer>
+    </div>
+  );
+}
+
+/* ── PWA: runtime manifest + icon + service worker ── */
+(function initPWA(){
+  try{
+    const c=document.createElement("canvas"); c.width=c.height=512; const x=c.getContext("2d");
+    x.fillStyle="#1F2A22"; x.fillRect(0,0,512,512);
+    x.fillStyle="#3E7C6A"; x.beginPath(); x.arc(256,256,150,0,Math.PI*2); x.fill();
+    x.strokeStyle="#EDE6D6"; x.lineWidth=18; x.beginPath();
+    x.moveTo(180,330); x.bezierCurveTo(180,210,330,210,340,180);
+    x.bezierCurveTo(340,300,210,330,180,330); x.stroke();
+    x.beginPath(); x.moveTo(180,330); x.lineTo(330,195); x.stroke();
+    const icon=c.toDataURL("image/png");
+    let l=document.querySelector("link[rel='apple-touch-icon']"); if(!l){ l=document.createElement("link"); l.rel="apple-touch-icon"; document.head.appendChild(l);} l.href=icon;
+    const manifest={ name:"Field Note", short_name:"Field Note", start_url:".", display:"standalone",
+      background_color:"#EDE6D6", theme_color:"#1F2A22",
+      icons:[{src:icon,sizes:"512x512",type:"image/png",purpose:"any maskable"}] };
+    const blob=new Blob([JSON.stringify(manifest)],{type:"application/manifest+json"});
+    const ml=document.createElement("link"); ml.rel="manifest"; ml.href=URL.createObjectURL(blob); document.head.appendChild(ml);
+    if("serviceWorker" in navigator){ navigator.serviceWorker.register("./sw.js").catch(()=>{}); }
+  }catch(e){}
+})();
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
